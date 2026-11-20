@@ -1,0 +1,899 @@
+Yes. Below is the **complete end-to-end roadmap from the very beginning**, designed for **Windows + Visual Studio Code + Python + free/open-source tools**. Since you already have `(.venv)` visible, you can skip the virtual-environment creation if you want, but I’m including everything for completeness.
+
+## Complete architecture
+
+```text
+User
+  ↓
+Streamlit Chat UI
+  ↓
+FastAPI Backend
+  ↓
+Conversation Orchestrator
+  ├── Intent Detection
+  ├── Customer Profile Extraction
+  ├── Eligibility Engine
+  ├── Recommendation Engine
+  ├── RAG Search
+  └── Local LLM Explanation
+  ↓
+SQLite Policy Database
+  ↓
+ChromaDB Vector Database
+  ↓
+Ollama + Llama 3.2
+```
+
+The complete build has these phases:
+
+1. Install prerequisites and create project.
+2. Create virtual environment.
+3. Create folder structure.
+4. Install Python dependencies.
+5. Create synthetic insurance policy data.
+6. Create SQLite database.
+7. Build customer profile models.
+8. Build eligibility engine.
+9. Build recommendation engine.
+10. Build and test FastAPI.
+11. Install and connect Ollama.
+12. Add intent and entity extraction.
+13. Create synthetic policy documents.
+14. Build RAG with ChromaDB.
+15. Build the conversation orchestrator.
+16. Build Streamlit chat UI.
+17. Add policy comparison.
+18. Add human-agent handoff.
+19. Add privacy and AI guardrails.
+20. Add automated evaluation.
+21. Add tests.
+22. Add Docker.
+23. Run the complete application.
+
+---
+
+## Phase 1: Install prerequisites
+
+Install:
+
+* Python 3.11 or 3.12.
+* Visual Studio Code.
+* Git.
+* Ollama.
+* Docker Desktop, optional until the final stage.
+
+In VS Code, install the Microsoft **Python**, **Pylance**, and **Python Debugger** extensions.
+
+Open VS Code, select **File → Open Folder**, and create/open:
+
+```text
+C:\Users\GENAIMXGDL4USR16\insurance-ai-chatbot
+```
+
+Open the integrated terminal with `Ctrl + backtick`.
+
+---
+
+## Phase 2: Create and activate the virtual environment
+
+From the project root:
+
+```powershell
+python -m venv .venv
+```
+
+If PowerShell blocks activation, run:
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+```
+
+Then activate:
+
+```powershell
+.venv\Scripts\Activate.ps1
+```
+
+You should see:
+
+```text
+(.venv) PS C:\Users\GENAIMXGDL4USR16\insurance-ai-chatbot>
+```
+
+Verify Python:
+
+```powershell
+python --version
+pip --version
+```
+
+---
+
+## Phase 3: Create the project structure
+
+Run:
+
+```powershell
+mkdir backend, frontend, data, policy_documents, evaluation, tests
+mkdir backend\api, backend\agents, backend\engines, backend\models, backend\services
+```
+
+Create Python package files:
+
+```powershell
+New-Item backend\__init__.py
+New-Item backend\api\__init__.py
+New-Item backend\agents\__init__.py
+New-Item backend\engines\__init__.py
+New-Item backend\models\__init__.py
+New-Item backend\services\__init__.py
+```
+
+Final structure:
+
+```text
+insurance-ai-chatbot/
+│
+├── .venv/
+├── backend/
+│   ├── api/
+│   ├── agents/
+│   ├── engines/
+│   ├── models/
+│   └── services/
+├── frontend/
+├── data/
+├── policy_documents/
+├── evaluation/
+├── tests/
+├── requirements.txt
+├── .gitignore
+└── README.md
+```
+
+---
+
+## Phase 4: Create `requirements.txt`
+
+Create `requirements.txt`:
+
+```text
+fastapi
+uvicorn[standard]
+streamlit
+requests
+pandas
+pydantic
+sqlalchemy
+ollama
+sentence-transformers
+chromadb
+pypdf
+python-multipart
+pytest
+httpx
+```
+
+Install:
+
+```powershell
+pip install -r requirements.txt
+```
+
+This can take several minutes because `sentence-transformers` may install PyTorch.
+
+Create `.gitignore`:
+
+```text
+.venv/
+__pycache__/
+*.pyc
+.env
+chroma_db/
+*.db
+.pytest_cache/
+```
+
+---
+
+## Phase 5: Create synthetic insurance policy data
+
+Create:
+
+```text
+data/policies.csv
+```
+
+Add:
+
+```csv
+policy_id,policy_name,policy_type,min_age,max_age,coverage_amount,monthly_premium,deductible,family_supported,max_dependents,waiting_period_days,pre_existing_conditions,geographic_coverage,description
+HLT001,Family Secure Plus,Health,18,65,500000,180,5000,true,4,30,true,National,"Comprehensive family health insurance with hospitalization, emergency care and pre-existing condition coverage."
+HLT002,Essential Health Basic,Health,18,60,200000,80,10000,false,0,30,false,National,"Affordable individual health protection covering hospitalization and emergency medical treatment."
+HLT003,Health Premium Gold,Health,21,65,750000,220,3000,true,5,15,true,International,"Premium family health coverage with higher limits and international emergency protection."
+HLT004,Young Adult Health,Health,18,35,150000,55,8000,false,0,15,false,National,"Low-cost health coverage designed for young adults."
+HLT005,Senior Health Care,Health,55,75,300000,250,12000,false,0,60,true,National,"Health insurance specifically designed for senior citizens."
+HLT006,Family Value Care,Health,18,60,350000,140,7000,true,3,30,false,National,"Balanced family health protection with affordable premiums."
+HLT007,Global Family Elite,Health,25,60,1000000,350,2000,true,6,15,true,International,"High-value international family health insurance."
+HLT008,Smart Health Individual,Health,18,50,250000,95,6000,false,0,30,true,National,"Individual health coverage supporting declared pre-existing conditions."
+HLT009,Family Starter Plan,Health,21,45,300000,120,9000,true,2,45,false,National,"Entry-level family insurance for couples and small families."
+HLT010,Complete Family Shield,Health,25,65,600000,200,4000,true,4,30,true,National,"Comprehensive family protection with strong coverage."
+```
+
+---
+
+## Phase 6: Create the SQLite database
+
+Create:
+
+```text
+backend/services/database.py
+```
+
+```python
+from pathlib import Path
+
+import pandas as pd
+from sqlalchemy import create_engine
+
+
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
+CSV_FILE = BASE_DIR / "data" / "policies.csv"
+DB_FILE = BASE_DIR / "insurance.db"
+
+engine = create_engine(f"sqlite:///{DB_FILE}")
+
+
+def initialize_database():
+    policies = pd.read_csv(CSV_FILE)
+
+    policies.to_sql(
+        "policies",
+        engine,
+        if_exists="replace",
+        index=False
+    )
+
+    print(f"Loaded {len(policies)} policies into SQLite.")
+
+
+def get_all_policies():
+    return pd.read_sql("SELECT * FROM policies", engine)
+
+
+if __name__ == "__main__":
+    initialize_database()
+```
+
+Run:
+
+```powershell
+python -m backend.services.database
+```
+
+Expected:
+
+```text
+Loaded 10 policies into SQLite.
+```
+
+---
+
+## Phase 7: Create customer profile models
+
+Create:
+
+```text
+backend/models/customer.py
+```
+
+```python
+from typing import Optional
+
+from pydantic import BaseModel
+
+
+class CustomerProfile(BaseModel):
+    age: Optional[int] = None
+    dependents: Optional[int] = None
+    monthly_budget: Optional[float] = None
+    desired_coverage: Optional[float] = None
+    insurance_type: Optional[str] = "Health"
+    pre_existing_conditions: Optional[bool] = None
+    international_coverage: Optional[bool] = False
+```
+
+Create:
+
+```text
+backend/models/policy.py
+```
+
+```python
+from pydantic import BaseModel
+
+
+class Policy(BaseModel):
+    policy_id: str
+    policy_name: str
+    policy_type: str
+    min_age: int
+    max_age: int
+    coverage_amount: float
+    monthly_premium: float
+    deductible: float
+    family_supported: bool
+    max_dependents: int
+    waiting_period_days: int
+    pre_existing_conditions: bool
+    geographic_coverage: str
+    description: str
+```
+
+---
+
+## Phase 8: Build the eligibility engine
+
+Create:
+
+```text
+backend/engines/eligibility_engine.py
+```
+
+```python
+def is_eligible(customer, policy):
+
+    if not policy["min_age"] <= customer.age <= policy["max_age"]:
+        return False
+
+    if (
+        customer.dependents is not None
+        and customer.dependents > 0
+        and not policy["family_supported"]
+    ):
+        return False
+
+    if (
+        customer.dependents is not None
+        and customer.dependents > policy["max_dependents"]
+    ):
+        return False
+
+    if (
+        customer.pre_existing_conditions is True
+        and not policy["pre_existing_conditions"]
+    ):
+        return False
+
+    return True
+
+
+def get_eligible_policies(customer, policies):
+    return [
+        policy
+        for _, policy in policies.iterrows()
+        if is_eligible(customer, policy)
+    ]
+```
+
+---
+
+## Phase 9: Build recommendation engine
+
+Create:
+
+```text
+backend/engines/recommendation_engine.py
+```
+
+```python
+def calculate_score(customer, policy):
+    score = 0
+    reasons = []
+
+    if policy["monthly_premium"] <= customer.monthly_budget:
+        score += 30
+        reasons.append("Fits within your monthly budget.")
+
+    coverage_ratio = min(
+        policy["coverage_amount"] / customer.desired_coverage,
+        1
+    )
+
+    score += coverage_ratio * 30
+
+    if policy["coverage_amount"] >= customer.desired_coverage:
+        reasons.append("Meets your desired coverage amount.")
+
+    if customer.dependents > 0 and policy["family_supported"]:
+        score += 20
+        reasons.append("Supports family coverage.")
+
+    if (
+        customer.pre_existing_conditions
+        and policy["pre_existing_conditions"]
+    ):
+        score += 10
+        reasons.append("Supports declared pre-existing conditions.")
+
+    if (
+        customer.international_coverage
+        and policy["geographic_coverage"] == "International"
+    ):
+        score += 10
+        reasons.append("Includes international coverage.")
+
+    return round(score, 2), reasons
+
+
+def recommend_policies(customer, eligible_policies, top_n=3):
+    recommendations = []
+
+    for policy in eligible_policies:
+        score, reasons = calculate_score(customer, policy)
+
+        recommendations.append(
+            {
+                "policy": dict(policy),
+                "score": score,
+                "reasons": reasons
+            }
+        )
+
+    recommendations.sort(
+        key=lambda item: item["score"],
+        reverse=True
+    )
+
+    return recommendations[:top_n]
+```
+
+---
+
+## Phase 10: Test the recommendation engine
+
+Create:
+
+```text
+tests/test_recommendation.py
+```
+
+```python
+from backend.engines.eligibility_engine import get_eligible_policies
+from backend.engines.recommendation_engine import recommend_policies
+from backend.models.customer import CustomerProfile
+from backend.services.database import get_all_policies
+
+
+customer = CustomerProfile(
+    age=34,
+    dependents=2,
+    monthly_budget=200,
+    desired_coverage=500000,
+    pre_existing_conditions=True,
+    international_coverage=False
+)
+
+policies = get_all_policies()
+
+eligible = get_eligible_policies(customer, policies)
+
+recommendations = recommend_policies(
+    customer,
+    eligible,
+    top_n=3
+)
+
+print("\nTOP RECOMMENDATIONS")
+print("=" * 70)
+
+for rank, recommendation in enumerate(recommendations, start=1):
+
+    policy = recommendation["policy"]
+
+    print(f"\n#{rank}: {policy['policy_name']}")
+    print(f"Score: {recommendation['score']}")
+    print(f"Premium: ${policy['monthly_premium']}")
+    print(f"Coverage: ${policy['coverage_amount']}")
+
+    for reason in recommendation["reasons"]:
+        print(f"  - {reason}")
+```
+
+Run:
+
+```powershell
+python -m tests.test_recommendation
+```
+
+At this point, you already have a working insurance recommendation engine without AI.
+
+---
+
+## Phase 11: Create FastAPI backend
+
+Create:
+
+```text
+backend/main.py
+```
+
+```python
+from fastapi import FastAPI
+
+from backend.engines.eligibility_engine import get_eligible_policies
+from backend.engines.recommendation_engine import recommend_policies
+from backend.models.customer import CustomerProfile
+from backend.services.database import get_all_policies
+
+
+app = FastAPI(
+    title="Insurance Policy Recommendation API",
+    version="1.0"
+)
+
+
+@app.get("/")
+def home():
+    return {
+        "message": "Insurance AI Chatbot API is running"
+    }
+
+
+@app.post("/recommend")
+def recommend(customer: CustomerProfile):
+
+    policies = get_all_policies()
+
+    eligible = get_eligible_policies(
+        customer,
+        policies
+    )
+
+    recommendations = recommend_policies(
+        customer,
+        eligible,
+        top_n=3
+    )
+
+    return {
+        "eligible_policy_count": len(eligible),
+        "recommendations": recommendations
+    }
+```
+
+Start the API:
+
+```powershell
+uvicorn backend.main:app --reload
+```
+
+Open:
+
+```text
+http://127.0.0.1:8000/docs
+```
+
+Use the Swagger UI to test `/recommend`.
+
+---
+
+## Phase 12: Install and test Ollama
+
+Verify Ollama:
+
+```powershell
+ollama --version
+```
+
+Download the model:
+
+```powershell
+ollama pull llama3.2:3b
+```
+
+Run:
+
+```powershell
+ollama run llama3.2:3b
+```
+
+Test:
+
+```text
+Explain a health insurance deductible in simple language.
+```
+
+Then exit:
+
+```text
+/bye
+```
+
+---
+
+## Phase 13: Create Ollama service
+
+Create:
+
+```text
+backend/services/ollama_service.py
+```
+
+```python
+import ollama
+
+
+MODEL_NAME = "llama3.2:3b"
+
+
+def generate_response(prompt: str) -> str:
+
+    response = ollama.chat(
+        model=MODEL_NAME,
+        messages=[
+            {
+                "role": "system",
+                "content": """
+You are an insurance policy assistant.
+
+Explain insurance concepts clearly and simply.
+Never invent policy coverage, exclusions, premiums,
+eligibility criteria, or claim outcomes.
+"""
+            },
+            {
+                "role": "user",
+                "content": prompt
+            }
+        ]
+    )
+
+    return response["message"]["content"]
+```
+
+Test it:
+
+```python
+from backend.services.ollama_service import generate_response
+
+answer = generate_response(
+    "Explain health insurance deductible simply."
+)
+
+print(answer)
+```
+
+---
+
+## Phase 14: Build intent and entity extraction
+
+Create:
+
+```text
+backend/agents/profile_extractor.py
+```
+
+The LLM will convert this:
+
+```text
+I'm 34, married with two children, and need family health insurance under $200 per month.
+```
+
+Into:
+
+```json
+{
+  "intent": "FIND_POLICY",
+  "age": 34,
+  "dependents": 2,
+  "monthly_budget": 200,
+  "insurance_type": "Health"
+}
+```
+
+The key rule here is to force Ollama to return valid JSON. We will implement JSON validation with Pydantic and fallback handling if the model returns malformed output.
+
+---
+
+## Phase 15: Create policy documents for RAG
+
+For each policy, create text documents containing:
+
+```text
+Policy ID
+Policy name
+Description
+Coverage
+Premium
+Deductible
+Benefits
+Exclusions
+Eligibility
+Waiting period
+Claims process
+```
+
+For example:
+
+```text
+policy_documents/HLT001.txt
+```
+
+These documents become the trusted knowledge source for policy explanations.
+
+---
+
+## Phase 16: Build the RAG pipeline
+
+The flow will be:
+
+```text
+Policy documents
+    ↓
+Sentence Transformers
+    ↓
+Embeddings
+    ↓
+ChromaDB
+    ↓
+User asks question
+    ↓
+Semantic retrieval
+    ↓
+Top relevant document chunks
+    ↓
+Ollama receives only retrieved context
+    ↓
+Grounded answer
+```
+
+The embedding model can be:
+
+```text
+all-MiniLM-L6-v2
+```
+
+This is free and runs locally.
+
+---
+
+## Phase 17: Build conversation memory and orchestration
+
+The chatbot will maintain:
+
+```json
+{
+  "session_id": "abc123",
+  "profile": {
+    "age": 34,
+    "dependents": 2,
+    "monthly_budget": 200
+  },
+  "last_intent": "FIND_POLICY",
+  "recommended_policies": [
+    "HLT001",
+    "HLT010"
+  ],
+  "conversation_stage": "COMPARISON"
+}
+```
+
+The orchestrator decides whether to:
+
+```text
+Ask a follow-up question
+Recommend policies
+Compare policies
+Explain a policy
+Answer using RAG
+Transfer to human agent
+```
+
+---
+
+## Phase 18: Build Streamlit UI
+
+The final interface will contain:
+
+```text
+┌────────────────────────────────────────────────────┐
+│       🛡️ Insurance Policy AI Assistant             │
+├────────────────────────────────────────────────────┤
+│                                                    │
+│ Bot: Hello! What type of insurance do you need?   │
+│                                                    │
+│ User: Health insurance for my family.              │
+│                                                    │
+│ Bot: What's your age and how many dependents       │
+│      would you like to cover?                      │
+│                                                    │
+│ User: I'm 34 with two dependents.                  │
+│                                                    │
+│ Bot: What's your monthly budget?                   │
+│                                                    │
+│ User: $200.                                        │
+│                                                    │
+│ Recommended Policies                               │
+│ ┌───────────────────────────────────────────────┐  │
+│ │ 1. Family Secure Plus       Score: 92%        │  │
+│ │ 2. Complete Family Shield   Score: 89%        │  │
+│ │ 3. Family Value Care        Score: 82%        │  │
+│ └───────────────────────────────────────────────┘  │
+│                                                    │
+│        [Compare]       [Talk to Agent]             │
+│                                                    │
+├────────────────────────────────────────────────────┤
+│ Type your message...                               │
+└────────────────────────────────────────────────────┘
+```
+
+---
+
+## Phase 19: Human-agent handoff
+
+When requested, save:
+
+```json
+{
+  "session_id": "abc123",
+  "customer_profile": {},
+  "conversation_summary": "",
+  "recommended_policies": [],
+  "handoff_reason": "Customer requested human assistance"
+}
+```
+
+For the free prototype, we'll simulate this with SQLite. Later, it could connect to a real CRM or contact-center platform.
+
+---
+
+## Phase 20: Testing and evaluation
+
+We'll test:
+
+```text
+Recommendation accuracy ≥ 85%
+Intent accuracy
+Top-3 hit rate
+Response latency
+RAG retrieval quality
+Grounded answer rate
+Hallucination rate
+Conversation completion rate
+```
+
+We'll create approximately 50–100 synthetic customer scenarios with expected recommendations.
+
+---
+
+## Phase 21: Run the final application
+
+Terminal 1:
+
+```powershell
+uvicorn backend.main:app --reload
+```
+
+Terminal 2:
+
+```powershell
+streamlit run frontend/app.py
+```
+
+Ollama runs locally in the background.
+
+Your chatbot will open in the browser, usually at:
+
+```text
+localhost:8501
+```
+
+My recommendation is **not to create all 23 phases at once**, because debugging becomes difficult. Follow the roadmap in order and validate each component before moving forward.
+
+Since you already have `(.venv)` active, your immediate next task is **Phase 3: create the project folder structure**, then proceed through **Phase 5**. After that, test the database before building the recommendation engine.
+
+
+
+streamlit run frontend/app.py    Start the frontend
+uvicorn backend.main:app	Start the server
